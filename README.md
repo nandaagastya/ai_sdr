@@ -25,7 +25,7 @@ Prospecting Outreach Reply/Qual Call-Prep Booking Post-Call-Log Learning-Loop
 Only **Prospecting** is fully wired up in this prototype — it makes a real
 call to the Apollo.io organization search API, scores results with a
 transparent rules-based ICP-fit scorer, and upserts them into the shared
-schema. The other six agents are represented as `AgentRun` audit records
+schema. Outreach now supports saved template-based previews at /outreach, without delivery. The remaining planned agents are represented as `AgentRun` audit records
 so the data model and dashboard already reflect the target shape; wiring
 each one up is the next milestone (see "On the horizon" below).
 
@@ -129,3 +129,29 @@ The development server binds to localhost with debugging disabled.
 Authentication, client isolation, migrations, and production serving remain
 unimplemented. Live Apollo compatibility has not been verified in this import.
 Repository visibility remains private; open-source licensing is pending.
+
+
+## Outreach previews
+
+Open http://127.0.0.1:5000/outreach or choose **Create outreach preview**
+on the dashboard. Pick a contact, enter your name and a factual offer, and
+generate three draft emails (suggested days 0, 4, and 9). Contacts are ordered
+by company ICP score, then decision-maker status. Existing contacts at any
+pipeline stage can be previewed; this is not live-send eligibility logic.
+
+Drafts use versioned templates in app/prompts/outreach and require no AI or
+email API key. Each intentional generation saves an outreach_preview Activity
+and an outreach AgentRun. Refreshing the result does not regenerate it.
+Recent previews are linked from the dashboard.
+
+The API is POST /api/outreach/preview with JSON fields contact_id (integer),
+sender_name (up to 100 characters), and offer (up to 600 characters).
+Success returns HTTP 201, the saved activity and run IDs, and three messages.
+Invalid input returns HTTP 400. Generation errors return HTTP 500 and close
+the execution audit as an error.
+
+Nothing is sent or scheduled; no tasks are created or pipeline stages changed.
+Existing SQLite databases work without reseeding or schema changes.
+This is the preview portion of Phase 1, not a complete sending agent. Provider
+integration, opt-outs, cadence execution, send idempotency, and live-send
+eligibility are still pending. Do not expose the unauthenticated prototype publicly.

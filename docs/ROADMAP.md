@@ -4,7 +4,11 @@ Based on the AI SDR Platform — Step-by-Step Build Guide dated September 17, 20
 
 ## Current status
 
-The guide describes an existing Flask/SQLite prototype with Apollo prospecting, five shared models, six endpoints, and a dashboard. The rebuilt prototype is now imported with five passing offline regression tests and a seeded dashboard/API smoke check. Live Apollo access remains unverified. See IMPORT_REVIEW.md for gaps before outreach.
+The guide describes an existing Flask/SQLite prototype with Apollo prospecting, five shared models, six endpoints, and a dashboard. The rebuilt prototype is now imported with ten passing offline regression tests and a seeded dashboard/API smoke check. Live Apollo access remains unverified. See IMPORT_REVIEW.md for gaps before outreach.
+
+## Outreach preview milestone
+
+Implemented: saved three-touch template previews, dashboard form and history links, input validation, and execution audit. No email delivery or scheduling. Existing databases need no migration for this milestone. Phase 1 sending remains incomplete.
 
 ## Product scope
 

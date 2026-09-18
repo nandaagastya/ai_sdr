@@ -80,8 +80,16 @@
 <body>
 
 <h1>AI SDR Platform</h1>
+<p><a href="/outreach" style="color:#8eb3ff">Create outreach preview →</a></p>
 <p class="subtitle">Prototype — agent stack, shared data layer, and live pipeline state</p>
 
+<div class="panel">
+  <h2>Saved outreach previews</h2>
+  <p class="desc">Drafts only. No messages have been sent by the preview agent.</p>
+  {% for preview in recent_previews %}
+  <p><a style="color:#8eb3ff" href="/outreach?preview_id={{ preview.id }}">Preview #{{ preview.id }} — {{ preview.account.name }}</a></p>
+  {% else %}<p>No previews yet. Use “Create outreach preview” above.</p>{% endfor %}
+</div>
 <div class="stat-row">
   <div class="stat-card"><div class="label">Total accounts</div><div class="value">{{ total_accounts }}</div></div>
   <div class="stat-card"><div class="label">Avg ICP fit score</div><div class="value">{{ avg_score }}</div></div>
@@ -105,7 +113,7 @@
 
 <div class="panel">
   <h2>Agent stack</h2>
-  <p class="desc">Orchestrator + seven sub-agents on one shared Postgres/SQLite data layer. Only Prospecting is wired to a live data source (Apollo) in this prototype — the rest are stubbed as AgentRun records so the shape is already right.</p>
+  <p class="desc">Orchestrator + seven sub-agents on one shared Postgres/SQLite data layer. Only Prospecting is wired to a live data source (Apollo) in this prototype — Outreach generates saved previews only. Remaining agents are planned; seeded runs are demo records.</p>
   <div class="svg-wrap">
   <svg width="980" height="330" viewBox="0 0 980 330">
     <defs>
@@ -124,7 +132,7 @@
     <!-- Sub-agent boxes -->
     {% set agents = [
       ("Prospecting", 20, "#38c793", "live"),
-      ("Outreach", 150, "#8b93a3", "planned"),
+      ("Outreach", 150, "#e0a83e", "preview"),
       ("Reply /\nQualification", 280, "#8b93a3", "planned"),
       ("Call-Prep", 410, "#8b93a3", "planned"),
       ("Booking", 540, "#8b93a3", "planned"),
@@ -137,7 +145,7 @@
       {% for line in label.split("\n") %}
         <text x="{{ x + 80 }}" y="{{ 172 + loop.index0*16 }}" font-size="12" font-weight="600" text-anchor="middle">{{ line }}</text>
       {% endfor %}
-      <text x="{{ x + 80 }}" y="222" font-size="10" text-anchor="middle" fill="{{ '#38c793' if state == 'live' else '#8b93a3' }}">{{ 'LIVE' if state == 'live' else 'planned' }}</text>
+      <text x="{{ x + 80 }}" y="222" font-size="10" text-anchor="middle" fill="{{ '#38c793' if state == 'live' else '#8b93a3' }}">{{ 'LIVE' if state == 'live' else state }}</text>
     {% endfor %}
 
     <!-- Learning loop feedback (dashed, feeds back into prospecting + outreach) -->

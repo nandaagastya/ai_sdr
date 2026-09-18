@@ -1,0 +1,9 @@
+Closing the loop with {company}
+Hi {first_name},
+
+One final follow-up on my earlier note. If this is not a priority for {company}, no problem.
+
+Would a conversation be useful, or should I leave it here?
+
+Best,
+{sender_name}

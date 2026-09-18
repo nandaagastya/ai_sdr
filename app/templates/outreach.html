@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outreach previews | AI SDR</title>
+<style>
+body{background:#0f1115;color:#e6e8eb;font:16px system-ui;margin:0;padding:28px}main{max-width:850px;margin:auto}a{color:#8eb3ff}h1{margin-bottom:8px}.muted{color:#afb7c7}form,article{background:#171a21;border:1px solid #323949;border-radius:12px;padding:24px;margin:20px 0}label{display:block;margin:18px 0 8px}input,select,textarea{box-sizing:border-box;width:100%;padding:12px;background:#10141c;color:#fff;border:1px solid #69758d;border-radius:6px;font:inherit}button{margin-top:20px;padding:12px 20px;border:0;border-radius:6px;background:#5b8def;color:white;font:inherit;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6}.error{padding:16px;border:1px solid #e0605b}h2{font-size:19px}.badge{color:#7ce0b7}button:disabled{opacity:.5}
+</style></head>
+<body><main>
+<a href="/">← Dashboard</a>
+<h1>Outreach previews</h1>
+<p class="muted">Create a three-email sequence for review. Nothing is sent or scheduled, and pipeline stages stay unchanged.</p>
+{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+<form method="post">
+<label for="contact_id">Contact</label>
+<select id="contact_id" name="contact_id" required>
+<option value="">Choose a contact</option>
+{% for contact in contacts %}<option value="{{ contact.id }}" {% if values.get('contact_id')|string == contact.id|string %}selected{% endif %}>{{ contact.account.name }} — {{ contact.first_name or '' }} {{ contact.last_name or '' }} — {{ contact.email or 'No email' }}</option>{% endfor %}
+</select>
+{% if not contacts %}<p>No contacts yet. Prospecting currently imports companies only; use your demo database to try previews.</p>{% endif %}
+<label for="sender_name">Your name</label>
+<input id="sender_name" name="sender_name" maxlength="100" required value="{{ values.get('sender_name', '') }}">
+<label for="offer">What are you offering?</label>
+<input id="offer" name="offer" maxlength="600" required placeholder="Describe your offer in one or two sentences." value="{{ values.get('offer', '') }}">
+<p class="muted">Use claims you can support. These drafts use versioned templates, not an AI model.</p>
+<button {% if not contacts %}disabled{% endif %}>Generate preview</button>
+</form>
+{% if draft %}
+<section aria-label="Saved preview">
+<p class="badge">Saved preview #{{ draft.activity_id }} · No email sent</p>
+<p>To: {{ draft.recipient }} · {{ draft.template_version }}</p>
+{% for message in draft.messages %}<article>
+<p class="muted">Touch {{ message.touch }} · Suggested day {{ message.suggested_day }} · Not scheduled</p>
+<h2>{{ message.subject }}</h2><pre>{{ message.body }}</pre>
+</article>{% endfor %}
+<p class="muted">Refresh preserves this saved preview. Generate another to create a new version.</p>
+</section>{% endif %}
+</main></body></html>

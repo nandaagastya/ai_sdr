@@ -105,3 +105,17 @@ def trigger_prospecting_run():
     )
     status_code = 200 if result["status"] == "success" else 502
     return jsonify(result), status_code
+
+
+@api_bp.post("/outreach/preview")
+def generate_outreach_preview():
+    from app.agents.outreach import preview_outreach
+    from flask import current_app
+    try:
+        draft = preview_outreach(request.get_json(silent=True))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Outreach preview failed")
+        return jsonify({"status": "error", "message": "Preview generation failed. Check agent runs."}), 500
+    return jsonify({"status": "success", **draft}), 201

@@ -1,0 +1,11 @@
+Following up: {company}
+Hi {first_name},
+
+Following up on my note about {company}.
+
+{offer}
+
+Would you be the right person to speak with, or is there someone else on your team I should contact?
+
+Best,
+{sender_name}
