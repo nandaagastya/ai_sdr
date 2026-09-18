@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI SDR Platform — Prototype Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-border: #262b36;
+    --text: #e6e8eb;
+    --muted: #8b93a3;
+    --accent: #5b8def;
+    --accent-2: #38c793;
+    --warn: #e0a83e;
+    --danger: #e0605b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .stat-card .value { font-size: 26px; font-weight: 600; margin-top: 6px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 4px; }
+  .panel .desc { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 10px; border-bottom: 1px solid var(--panel-border); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--panel-border); }
+  tr:last-child td { border-bottom: none; }
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 100px; font-size: 11px; font-weight: 600;
+  }
+  .pill-new { background: #2a3040; color: var(--muted); }
+  .pill-qualified { background: rgba(91,141,239,.15); color: var(--accent); }
+  .pill-outreach { background: rgba(224,168,62,.15); color: var(--warn); }
+  .pill-replied { background: rgba(56,199,147,.15); color: var(--accent-2); }
+  .pill-booked { background: rgba(56,199,147,.3); color: var(--accent-2); }
+  .pill-closed { background: #2a3040; color: var(--muted); }
+  .pill-success { background: rgba(56,199,147,.15); color: var(--accent-2); }
+  .pill-error { background: rgba(224,96,91,.15); color: var(--danger); }
+  .pill-running { background: rgba(224,168,62,.15); color: var(--warn); }
+  .score-bar-track { background: #262b36; border-radius: 100px; height: 6px; width: 100px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .score-bar-fill { background: var(--accent); height: 100%; }
+  .run-btn {
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .run-btn:hover { opacity: .9; }
+  .run-btn:disabled { opacity: .5; cursor: default; }
+  #run-status { margin-top: 12px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+  svg text { fill: var(--text); font-family: inherit; }
+  .svg-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<h1>AI SDR Platform</h1>
+<p class="subtitle">Prototype — agent stack, shared data layer, and live pipeline state</p>
+
+<div class="stat-row">
+  <div class="stat-card"><div class="label">Total accounts</div><div class="value">{{ total_accounts }}</div></div>
+  <div class="stat-card"><div class="label">Avg ICP fit score</div><div class="value">{{ avg_score }}</div></div>
+  <div class="stat-card"><div class="label">Qualified</div><div class="value">{{ stage_counts.qualified }}</div></div>
+  <div class="stat-card"><div class="label">In outreach</div><div class="value">{{ stage_counts.outreach }}</div></div>
+  <div class="stat-card"><div class="label">Open tasks</div><div class="value">{{ open_tasks }}</div></div>
+</div>
+
+<div class="panel">
+  <h2>Pipeline by stage</h2>
+  <p class="desc">new → qualified → outreach → replied → booked → closed</p>
+  <table>
+    <tr>
+      {% for stage in stages %}<th>{{ stage }}</th>{% endfor %}
+    </tr>
+    <tr>
+      {% for stage in stages %}<td><span class="pill pill-{{ stage }}">{{ stage_counts[stage] }}</span></td>{% endfor %}
+    </tr>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Agent stack</h2>
+  <p class="desc">Orchestrator + seven sub-agents on one shared Postgres/SQLite data layer. Only Prospecting is wired to a live data source (Apollo) in this prototype — the rest are stubbed as AgentRun records so the shape is already right.</p>
+  <div class="svg-wrap">
+  <svg width="980" height="330" viewBox="0 0 980 330">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5b8def"></path>
+      </marker>
+      <marker id="arrow-dashed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#38c793"></path>
+      </marker>
+    </defs>
+
+    <!-- Orchestrator -->
+    <rect x="410" y="20" width="160" height="50" rx="8" fill="#5b8def" fill-opacity="0.18" stroke="#5b8def"></rect>
+    <text x="490" y="50" font-size="13" font-weight="600" text-anchor="middle">Orchestrator</text>
+
+    <!-- Sub-agent boxes -->
+    {% set agents = [
+      ("Prospecting", 20, "#38c793", "live"),
+      ("Outreach", 150, "#8b93a3", "planned"),
+      ("Reply /\nQualification", 280, "#8b93a3", "planned"),
+      ("Call-Prep", 410, "#8b93a3", "planned"),
+      ("Booking", 540, "#8b93a3", "planned"),
+      ("Post-Call\nLogging", 670, "#8b93a3", "planned"),
+      ("Learning\nLoop", 800, "#8b93a3", "planned")
+    ] %}
+    {% for label, x, color, state in agents %}
+      <line x1="{{ x + 80 }}" y1="70" x2="{{ x + 80 }}" y2="150" stroke="#5b8def" stroke-width="1.5" marker-end="url(#arrow)"></line>
+      <rect x="{{ x }}" y="150" width="160" height="54" rx="8" fill="{{ color }}" fill-opacity="0.15" stroke="{{ color }}"></rect>
+      {% for line in label.split("\n") %}
+        <text x="{{ x + 80 }}" y="{{ 172 + loop.index0*16 }}" font-size="12" font-weight="600" text-anchor="middle">{{ line }}</text>
+      {% endfor %}
+      <text x="{{ x + 80 }}" y="222" font-size="10" text-anchor="middle" fill="{{ '#38c793' if state == 'live' else '#8b93a3' }}">{{ 'LIVE' if state == 'live' else 'planned' }}</text>
+    {% endfor %}
+
+    <!-- Learning loop feedback (dashed, feeds back into prospecting + outreach) -->
+    <path d="M 800,150 C 700,270 300,270 100,204" fill="none" stroke="#38c793" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow-dashed)"></path>
+    <text x="450" y="290" font-size="11" fill="#38c793" text-anchor="middle">learning loop: outcomes feed back into ICP + signal scoring</text>
+
+    <!-- Shared data layer -->
+    <rect x="20" y="240" width="940" height="0" stroke="none"></rect>
+  </svg>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Data flow — one lead's path</h2>
+  <p class="desc">The live phone call is the one deliberately human-only step; everything around it is automatable.</p>
+  <div class="svg-wrap">
+  <svg width="1020" height="230" viewBox="0 0 1020 230">
+    <defs>
+      <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5b8def"></path>
+      </marker>
+    </defs>
+    {% set flow = [
+      ("Apollo API", "#8b93a3"),
+      ("Prospecting\nAgent", "#38c793"),
+      ("ICP Scorer\n(rules-based)", "#38c793"),
+      ("Shared\nData Layer", "#5b8def"),
+      ("Outreach\nAgent", "#8b93a3"),
+      ("Reply?", "#e0a83e"),
+      ("Call-Prep +\nBooking", "#8b93a3"),
+      ("Human\nPhone Call", "#e0605b"),
+      ("Post-Call\nLogging", "#8b93a3")
+    ] %}
+    {% for label, color in flow %}
+      {% set x = loop.index0 * 112 + 10 %}
+      <rect x="{{ x }}" y="80" width="96" height="60" rx="8" fill="{{ color }}" fill-opacity="0.15" stroke="{{ color }}"></rect>
+      {% for line in label.split("\n") %}
+        <text x="{{ x + 48 }}" y="{{ 106 + loop.index0*16 }}" font-size="11" font-weight="600" text-anchor="middle">{{ line }}</text>
+      {% endfor %}
+      {% if not loop.last %}
+        <line x1="{{ x + 96 }}" y1="110" x2="{{ x + 112 }}" y2="110" stroke="#5b8def" stroke-width="1.5" marker-end="url(#arrow2)"></line>
+      {% endif %}
+    {% endfor %}
+
+    <!-- no-reply loop back to Outreach -->
+    <path d="M 566,80 C 566,20 454,20 454,80" fill="none" stroke="#e0a83e" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#arrow2)"></path>
+    <text x="510" y="18" font-size="10" fill="#e0a83e" text-anchor="middle">no reply → follow-up sequence</text>
+
+    <text x="510" y="200" font-size="11" fill="#e0605b" text-anchor="middle">human-in-the-loop is a deliberate product decision, not a gap</text>
+  </svg>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Top accounts by ICP fit</h2>
+  <table>
+    <tr><th>Account</th><th>Domain</th><th>Industry</th><th>Employees</th><th>ICP fit</th><th>Stage</th></tr>
+    {% for a in top_accounts %}
+    <tr>
+      <td>{{ a.name }}</td>
+      <td>{{ a.domain or "—" }}</td>
+      <td>{{ a.industry or "—" }}</td>
+      <td>{{ a.employee_count or "—" }}</td>
+      <td>
+        <span class="score-bar-track"><span class="score-bar-fill" style="width: {{ a.icp_fit_score }}%;"></span></span>
+        {{ a.icp_fit_score }}
+      </td>
+      <td><span class="pill pill-{{ a.stage }}">{{ a.stage }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" style="color: var(--muted);">No accounts yet — run <code>python seed.py</code> or trigger the prospecting agent below.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Recent agent runs</h2>
+  <table>
+    <tr><th>Agent</th><th>Status</th><th>Records</th><th>Detail</th><th>Started</th></tr>
+    {% for r in recent_runs %}
+    <tr>
+      <td>{{ r.agent_name }}</td>
+      <td><span class="pill pill-{{ r.status }}">{{ r.status }}</span></td>
+      <td>{{ r.records_processed }}</td>
+      <td style="color: var(--muted); max-width: 340px;">{{ r.detail or "—" }}</td>
+      <td style="color: var(--muted);">{{ r.started_at.strftime("%Y-%m-%d %H:%M") }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" style="color: var(--muted);">No agent runs logged yet.</td></tr>
+    {% endfor %}
+  </table>
+
+  <button class="run-btn" id="run-prospecting" style="margin-top: 16px;">Run prospecting agent (live Apollo call)</button>
+  <div id="run-status"></div>
+</div>
+
+<script>
+document.getElementById("run-prospecting").addEventListener("click", async function () {
+  const btn = this;
+  const status = document.getElementById("run-status");
+  btn.disabled = true;
+  status.textContent = "Calling Apollo…";
+  try {
+    const res = await fetch("/api/prospect/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      status.textContent = data.detail + "\nReload the page to see updated accounts.";
+    } else {
+      status.textContent = "Error: " + data.message;
+    }
+  } catch (err) {
+    status.textContent = "Request failed: " + err;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>

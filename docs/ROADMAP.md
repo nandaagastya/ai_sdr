@@ -4,7 +4,7 @@ Based on the AI SDR Platform — Step-by-Step Build Guide dated September 17, 20
 
 ## Current status
 
-The guide describes an existing Flask/SQLite prototype with Apollo prospecting, five shared models, six endpoints, and a dashboard. That prototype has not yet been imported or verified in this repository. The milestones below are planned, not implemented.
+The guide describes an existing Flask/SQLite prototype with Apollo prospecting, five shared models, six endpoints, and a dashboard. The rebuilt prototype is now imported with five passing offline regression tests and a seeded dashboard/API smoke check. Live Apollo access remains unverified. See IMPORT_REVIEW.md for gaps before outreach.
 
 ## Product scope
 
@@ -62,3 +62,4 @@ Integrate each agent with the execution wrapper as it becomes testable; phase 7 
 - Supply setup instructions, an environment-variable example, synthetic demo data, and contribution guidance.
 - Exclude secrets, live lead data, local databases, and client exports.
 - Make repository visibility public when the release contents are ready. Repository visibility cannot be changed through the currently available GitHub connector tools.
+
