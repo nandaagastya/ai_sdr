@@ -1,0 +1,19 @@
+{% extends 'workspace.html' %}{% block title %}Web results{% endblock %}{% block content %}
+<div class="heading"><div><h1>Web research results</h1><p class="muted">Public sources, with no Apollo or AI calls.</p></div><a href="{{ url_for('dashboard.discover') }}">Find more leads</a></div>
+{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+<p class="badge">{{ data.web_requests }} web requests · 0 Apollo requests</p>
+{% if summary %}<section class="panel"><h2>Saved to your prospects</h2><p>{{ summary.companies_added }} companies added · {{ summary.contacts_added }} published emails added · {{ summary.existing_emails_skipped }} existing emails skipped</p><a class="button" href="/">View prospects</a></section>{% endif %}
+{% if batch.kind == 'directory' %}
+{% for result in data.results %}<section class="panel">{% if result.status == 'error' %}<p class="warning">{{ result.url }} · {{ result.error }}</p>{% else %}<h2>Company links to review</h2><p><a href="{{ result.directory }}" target="_blank" rel="noopener noreferrer">Source directory</a> · {{ 'Cached result' if result.cached else 'New scan' }}</p><p class="muted">{{ result.note }}</p><form method="post" action="{{ url_for('web_prospecting.scan') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="companies">{% for url in result.candidates %}<label><input type="checkbox" name="selected_url" value="{{ url }}"> {{ url }}</label>{% else %}<p>No external company links found. Try a directory that links directly to company websites.</p>{% endfor %}<button {% if not result.candidates %}disabled{% endif %}>Scan selected websites</button></form>{% endif %}</section>{% endfor %}
+{% else %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{% for result in data.results %}{% set index=loop.index0 %}<section class="panel">{% if result.status == 'error' %}<h2>{{ result.url }}</h2><p class="warning">{{ result.error }}</p>{% else %}
+<div class="row"><h2>{{ result.company }}</h2><span class="badge">{{ 'Cached · no new web request' if result.cached else 'New web scan' }}</span></div><p><a href="{{ result.url }}" target="_blank" rel="noopener noreferrer">{{ result.domain }}</a> · Checked {{ result.checked_at[:10] }}</p>
+{% if not summary %}<label><input type="checkbox" name="selected" value="{{ index }}"> Save this company and its published emails</label><label for="company_{{ index }}">Company name — check before saving</label><input id="company_{{ index }}" name="company_{{ index }}" maxlength="255" value="{{ result.company }}" style="width:100%">{% endif %}
+{% for item in result.emails %}<div class="item"><p>{{ item.email }}</p><a href="{{ item.source }}" target="_blank" rel="noopener noreferrer">View source</a></div>{% else %}<p class="warning">No same-domain email published on the pages checked. You can save the company without a contact.</p>{% endfor %}
+<p class="muted">Published addresses may be shared inboxes. They are not verified decision-maker emails; names and job titles have not been inferred.</p><details><summary>Pages checked ({{ result.pages|length }})</summary>{% for page in result.pages %}<p><a href="{{ page }}" target="_blank" rel="noopener noreferrer">{{ page }}</a></p>{% endfor %}</details>{% for warning in result.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+{% endif %}</section>{% endfor %}
+{% if not summary %}<button>Save selected leads</button>{% endif %}</form>
+{% endif %}
+<section class="panel" style="margin-top:24px"><h2>Need more company information?</h2><p class="muted">You can request a targeted Apollo lookup yourself. Nothing here triggers Apollo automatically.</p><a href="{{ url_for('dashboard.discover') }}">Open web and Apollo search</a></section>
+{% endblock %}

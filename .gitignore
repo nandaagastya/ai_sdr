@@ -1,7 +1,15 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
 *.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.bak
+private-transfer/
+.DS_Store
 instance/
 .venv/
 venv/

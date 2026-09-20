@@ -1,0 +1,11 @@
+A question for {company}
+Hi {first_name},
+
+{role_context}
+
+{offer}
+
+Is this relevant to your team? {routing_question}
+
+Best,
+{sender_name}

@@ -12,6 +12,7 @@ API layer — six endpoints over the shared data model.
 from flask import Blueprint, jsonify, request
 
 from app.models import db, Account, Contact, Task, AgentRun
+from app.services.statuses import TRANSITIONS
 from app.agents.prospecting import run_prospecting_agent
 
 api_bp = Blueprint("api", __name__)
@@ -63,7 +64,7 @@ def list_agent_runs():
 
 @api_bp.get("/pipeline")
 def pipeline_summary():
-    stages = ["new", "qualified", "outreach", "replied", "booked", "closed"]
+    stages = ["new", "outreach", "replied", "booked", "closed"]
     counts = {
         stage: Account.query.filter_by(stage=stage).count() for stage in stages
     }
@@ -75,6 +76,8 @@ def pipeline_summary():
     return jsonify(
         {
             "stage_counts": counts,
+            "contact_progress_counts": {stage: Contact.query.filter_by(pipeline_stage=stage).count() for stage in TRANSITIONS},
+            "company_fit_counts": {fit: Account.query.filter_by(fit_status=fit).count() for fit in ("unassessed", "strong_fit", "possible_fit", "low_fit")},
             "total_accounts": total_accounts,
             "avg_icp_fit_score": round(avg_score_row or 0, 1),
             "open_tasks": open_tasks,
@@ -96,13 +99,12 @@ def trigger_prospecting_run():
       "per_page": 10
     }
     """
-    payload = request.get_json(silent=True) or {}
-    result = run_prospecting_agent(
-        keyword_tags=payload.get("keyword_tags"),
-        employee_ranges=payload.get("employee_ranges"),
-        locations=payload.get("locations"),
-        per_page=payload.get("per_page", 10),
-    )
+    from app.services.prospect_cache import cached_apollo
+    payload = request.get_json(silent=True)
+    try:
+        result = cached_apollo(payload if payload is not None else {})
+    except ValueError as exc:
+        return jsonify({'status':'error', 'message':str(exc)}), 400
     status_code = 200 if result["status"] == "success" else 502
     return jsonify(result), status_code
 
@@ -119,3 +121,22 @@ def generate_outreach_preview():
         current_app.logger.exception("Outreach preview failed")
         return jsonify({"status": "error", "message": "Preview generation failed. Check agent runs."}), 500
     return jsonify({"status": "success", **draft}), 201
+
+
+@api_bp.post("/outreach/previews/<int:preview_id>/review")
+def review_outreach_preview(preview_id):
+    from app.agents.review import review_preview, ReviewConflict
+    from flask import current_app
+    try:
+        draft = review_preview(preview_id, request.get_json(silent=True))
+    except ReviewConflict as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Preview review failed")
+        return jsonify({"status": "error", "message": "Could not save review. Reload and try again."}), 500
+    if draft is None:
+        return jsonify({"status": "error", "message": "Preview not found."}), 404
+    return jsonify({"status": "success", **draft})

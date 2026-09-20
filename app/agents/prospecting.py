@@ -23,9 +23,9 @@ from datetime import datetime
 
 import requests
 
-from app.models import db, Account, AgentRun
+from app.models import db, Account, AgentRun, Activity
 
-APOLLO_SEARCH_URL = "https://api.apollo.io/v1/mixed_companies/search"
+APOLLO_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_companies/search"
 
 # Defaults that mirror the parameters that worked in prior live runs
 # (US-based Salesforce consulting firms, 51-500 employees).
@@ -36,38 +36,12 @@ DEFAULT_PER_PAGE = 10
 
 
 def score_icp_fit(org: dict) -> tuple[int, list[str]]:
-    """
-    Transparent, rules-based ICP scorer (0-100). Every point is
-    explainable — no ML black box — so a rep or a client can see exactly
-    why an account ranked where it did.
-    """
-    score = 0
-    reasons = []
-
-    employee_count = org.get("estimated_num_employees") or org.get("employee_count") or 0
-    if 51 <= employee_count <= 500:
-        score += 40
-        reasons.append(f"employee count {employee_count} in target range (51-500)")
-    elif employee_count:
-        reasons.append(f"employee count {employee_count} outside target range")
-
-    keywords = " ".join(org.get("keywords", []) or []).lower()
-    industry = (org.get("industry") or "").lower()
-    name = (org.get("name") or "").lower()
-    if any(term in keywords or term in industry or term in name for term in ("salesforce", "crm consulting", "consulting")):
-        score += 30
-        reasons.append("keyword/industry match on target vertical")
-
-    location = (org.get("country") or org.get("primary_country") or "").lower()
-    if location in ("united states", "us", "usa", ""):
-        score += 20
-        reasons.append("US-based (or unspecified, treated as pass)")
-
-    if org.get("primary_domain") or org.get("website_url"):
-        score += 10
-        reasons.append("has a contactable domain")
-
-    return min(score, 100), reasons
+    from app.services.lead_quality import assess
+    score, reasons, _ = assess(org.get('name'), org.get('industry'),
+        org.get('estimated_num_employees') or org.get('employee_count'),
+        org.get('country') or org.get('primary_country'),
+        org.get('primary_domain') or org.get('website_url'))
+    return score, reasons
 
 
 def _log_run_start(agent_name="prospecting"):
@@ -90,6 +64,7 @@ def run_prospecting_agent(
     employee_ranges=None,
     locations=None,
     per_page=DEFAULT_PER_PAGE,
+    domains=None,
 ):
     keyword_tags = keyword_tags or DEFAULT_KEYWORD_TAGS
     employee_ranges = employee_ranges or DEFAULT_EMPLOYEE_RANGES
@@ -118,6 +93,9 @@ def run_prospecting_agent(
         "per_page": per_page,
     }
 
+    if domains:
+        body = {'q_organization_domains_list': domains, 'per_page': per_page}
+
     try:
         resp = requests.post(
             APOLLO_SEARCH_URL,
@@ -138,28 +116,47 @@ def run_prospecting_agent(
         _log_run_end(run, status="error", records_processed=0, detail=detail)
         return {"status": "error", "message": detail, "agent_run_id": run.id}
 
-    payload = resp.json()
-    organizations = payload.get("organizations", []) or payload.get("accounts", [])
+    try:
+        payload = resp.json()
+        organizations = payload.get("organizations", []) or payload.get("accounts", [])
+        if not isinstance(organizations, list) or any(not isinstance(org, dict) for org in organizations):
+            raise ValueError('Invalid organization list')
+    except (ValueError, AttributeError):
+        _log_run_end(run, status='error', records_processed=0, detail='Apollo returned invalid data.')
+        return {'status':'error', 'message':'Apollo returned invalid data.', 'agent_run_id':run.id}
 
     upserted = []
     for org in organizations:
         score, reasons = score_icp_fit(org)
         domain = org.get("primary_domain") or org.get("website_url")
+        if domain:
+            from urllib.parse import urlsplit
+            domain = urlsplit(domain if '://' in domain else 'https://' + domain).hostname
+            domain = domain.lower().removeprefix('www.') if domain else None
 
-        account = Account.query.filter_by(domain=domain).first() if domain else None
+        account = Account.query.filter(db.func.lower(Account.domain) == domain).first() if domain else None
         is_new = account is None
         if is_new:
             account = Account(name=org.get("name", "Unknown"), domain=domain, source="apollo")
             db.session.add(account)
 
-        account.name = org.get("name", account.name)
-        account.industry = org.get("industry")
-        account.employee_count = org.get("estimated_num_employees") or org.get("employee_count")
-        account.location = org.get("country") or org.get("primary_country")
-        account.icp_fit_score = score
-        account.icp_fit_reasons = " | ".join(reasons)
-        if is_new or account.stage == "new":
-            account.stage = "qualified" if score >= 60 else "new"
+        if not is_new and account.source in ('web', 'import'):
+            account.source += '+apollo'
+        db.session.add(Activity(account=account, activity_type='apollo_source', channel='apollo',
+                                summary='Company data retrieved through Apollo organization search.'))
+        # Partial provider responses must not erase existing facts.
+        for field, value in {
+            'name': org.get('name'), 'industry': org.get('industry'),
+            'location': org.get('country') or org.get('primary_country'),
+        }.items():
+            if isinstance(value, str) and value.strip():
+                setattr(account, field, value.strip())
+        count = org.get('estimated_num_employees') or org.get('employee_count')
+        if not isinstance(count, bool) and str(count).isdigit() and 0 < int(count) <= 100000000:
+            account.employee_count = int(count)
+        from app.services.lead_quality import apply_quality
+        apply_quality(account)
+        score = account.icp_fit_score
 
         upserted.append({"name": account.name, "domain": account.domain, "icp_fit_score": score})
 

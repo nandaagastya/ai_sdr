@@ -68,6 +68,7 @@ class OutreachTests(unittest.TestCase):
         for _ in range(2):
             page = self.client.get(response.headers["Location"])
             self.assertEqual(page.status_code, 200)
+            self.assertIn(f"Saved preview #{Activity.query.one().id}".encode(), page.data)
             self.assertIn(b"&lt;script&gt;", page.data)
             self.assertNotIn(b"<script>", page.data)
         self.assertEqual(Activity.query.count(), 1)

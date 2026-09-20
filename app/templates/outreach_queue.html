@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review queue | AI SDR</title>
+<style>
+body{background:#0f1115;color:#e6e8eb;font:16px system-ui;margin:0;padding:28px}main{max-width:1100px;margin:auto}a{color:#8eb3ff}h1{margin-bottom:8px}.muted{color:#afb7c7}nav,.filters{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}.filters a{padding:12px 18px;border:1px solid #465169;border-radius:8px;text-decoration:none}.filters a[aria-current=page]{background:#274677;color:white;border-color:#8eb3ff}form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.search{flex:1;min-width:200px}label{display:block;margin-bottom:8px}input,button{box-sizing:border-box;padding:12px;border-radius:6px;font:inherit}input{width:100%;background:#10141c;color:white;border:1px solid #69758d}button{background:#5b8def;color:white;border:0;cursor:pointer}.rows{padding:0;list-style:none}.rows li,.empty{background:#171a21;border:1px solid #323949;border-radius:12px;padding:20px;margin:16px 0}.row-title{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}h2{font-size:18px;margin:0 0 10px}.status{color:#ffc97b}.approved{color:#7ce0b7}p{overflow-wrap:anywhere}.pagination{justify-content:space-between}a:focus-visible,button:focus-visible{outline:2px solid white;outline-offset:4px}
+</style>
+</head>
+<body><main>
+<nav aria-label="Main navigation"><a href="{{ url_for('dashboard.dashboard') }}">← Dashboard</a><a href="{{ url_for('dashboard.outreach') }}">Create preview</a></nav>
+<h1>Review queue</h1>
+<p class="muted">Review saved outreach before it goes further. Approval never sends or schedules email.</p>
+<form method="get" action="{{ url_for('dashboard.outreach_queue') }}">
+<input type="hidden" name="status" value="{{ status }}">
+<div class="search"><label for="q">Search company, recipient, first subject, or preview number</label>
+<input type="search" id="q" name="q" maxlength="200" value="{{ query }}" placeholder="Find a saved preview"></div>
+<button>Search</button>{% if query %}<a href="{{ url_for('dashboard.outreach_queue', status=status) }}">Clear search</a>{% endif %}
+</form>
+<nav class="filters" aria-label="Review status">
+{% for key, label in [('all','All previews'), ('draft','Needs review'), ('approved','Approved')] %}
+<a href="{{ url_for('dashboard.outreach_queue', status=key, q=query) }}" {% if status == key %}aria-current="page"{% endif %}>{{ label }} ({{ counts[key] }})</a>
+{% endfor %}
+</nav>
+<p class="muted">{% if query %}Counts reflect your search. {% endif %}Showing {{ first }}–{{ last }} of {{ total }} · Newest previews first</p>
+<ul class="rows" aria-label="Saved previews">
+{% for preview in previews %}
+<li>
+<div class="row-title"><h2><a href="{{ url_for('dashboard.outreach', preview_id=preview.id) }}">Preview #{{ preview.id }} — {{ preview.company }}</a></h2><span class="status {{ 'approved' if preview.review_status == 'approved' else '' }}">{{ 'Approved' if preview.review_status == 'approved' else 'Needs review' }}</span></div>
+<p>{{ preview.subject }}</p>
+<p class="muted">To: {{ preview.recipient }} · Revision {{ preview.revision }} · {{ preview.generation }} · Created {{ preview.created_at.strftime('%b %d, %Y') }}</p>
+</li>
+{% endfor %}
+</ul>
+{% if not previews %}<div class="empty"><h2>{{ 'No matching previews' if query else ('No previews need review' if status == 'draft' else ('No approved previews yet' if status == 'approved' else 'No saved previews yet')) }}</h2>
+<p>{% if query %}Try a different company, recipient, or subject.{% elif status == 'approved' %}Open a saved preview and approve the reviewed text.{% elif status == 'draft' %}Create another preview or view your approved drafts.{% else %}Create your first preview to start reviewing outreach.{% endif %}</p>
+<a href="{{ url_for('dashboard.outreach') }}">Create preview</a></div>{% endif %}
+{% if pages > 1 %}<nav class="pagination" aria-label="Pagination">
+{% if page > 1 %}<a href="{{ url_for('dashboard.outreach_queue', status=status, q=query, page=page-1) }}">← Previous</a>{% endif %}
+<span>Page {{ page }} of {{ pages }}</span>
+{% if page < pages %}<a href="{{ url_for('dashboard.outreach_queue', status=status, q=query, page=page+1) }}">Next →</a>{% endif %}
+</nav>{% endif %}
+</main></body></html>

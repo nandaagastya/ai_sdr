@@ -8,7 +8,7 @@ The guide describes an existing Flask/SQLite prototype with Apollo prospecting, 
 
 ## Outreach preview milestone
 
-Implemented: saved three-touch template previews, dashboard form and history links, input validation, and execution audit. No email delivery or scheduling. Existing databases need no migration for this milestone. Phase 1 sending remains incomplete.
+Implemented: saved three-touch template previews, dashboard form and history links, input validation, and execution audit. Saved preview IDs display on reload. Optional AI-written first-email openings use a separate OpenAI provider with versioned instructions and token usage auditing; templates remain the default. No email delivery or scheduling. Existing databases need no migration for this milestone. Draft editing, revision history, approval/reopening, and stale-revision protection are implemented without provider calls. Approval is local review status only. A searchable, paginated review queue provides all/draft/approved filters and links to saved sequences. Phase 1 sending remains incomplete.
 
 ## Product scope
 
@@ -67,3 +67,7 @@ Integrate each agent with the execution wrapper as it becomes testable; phase 7 
 - Exclude secrets, live lead data, local databases, and client exports.
 - Make repository visibility public when the release contents are ready. Repository visibility cannot be changed through the currently available GitHub connector tools.
 
+
+## User dashboard and lead imports
+
+The overview now focuses on actionable tasks, draft reviews, and main prospects. CSV/TSV, XLSX, DOCX tables, and selectable-text PDF lead tables support column mapping, row preview, validation, duplicate skipping, and explicit import confirmation. Original files are not stored. Sending remains off.

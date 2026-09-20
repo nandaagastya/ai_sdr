@@ -61,7 +61,8 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/prospect/run", json={}).status_code, 200)
         self.assertEqual(Account.query.count(), 1)
         self.assertEqual(Account.query.one().stage, "booked")
-        self.assertEqual(AgentRun.query.filter_by(status="success").count(), 2)
+        self.assertEqual(AgentRun.query.filter_by(status="success").count(), 1)
+        post.assert_called_once()
 
     @patch.dict(os.environ, {"APOLLO_API_KEY": "test-placeholder"})
     @patch("app.agents.prospecting.requests.post")

@@ -1,19 +1,25 @@
-"""Deterministic outreach previews. No delivery provider or scheduler is called."""
+"""Template outreach previews with optional AI personalization. No delivery provider or scheduler is called."""
 import json
 from datetime import datetime
 from pathlib import Path
 
+from app.providers.personalization import configuration, generate_opening
 from app.models import db, Account, Contact, Activity, AgentRun
 
-TEMPLATE_VERSION = 'outreach-v1'
+TEMPLATE_VERSION = 'outreach-v2'
 TEMPLATE_DIR = Path(__file__).resolve().parents[1] / 'prompts' / 'outreach'
 
 
 def preview_outreach(payload):
     if not isinstance(payload, dict):
         raise ValueError('Provide a JSON object or use the preview form.')
-    if set(payload) - {'contact_id', 'sender_name', 'offer'}:
-        raise ValueError('Only contact_id, sender_name, and offer are supported; this endpoint never sends email.')
+    if set(payload) - {'contact_id', 'sender_name', 'offer', 'personalization'}:
+        raise ValueError('Only contact_id, sender_name, offer, and personalization are supported; this endpoint never sends email.')
+    personalization = payload.get('personalization', 'template')
+    if personalization not in ('template', 'ai'):
+        raise ValueError('Personalization must be template or ai.')
+    if personalization == 'ai':
+        configuration()
     contact_id = payload.get('contact_id')
     if isinstance(contact_id, bool) or not isinstance(contact_id, int) or contact_id < 1:
         raise ValueError('Choose a valid contact.')
@@ -38,15 +44,28 @@ def preview_outreach(payload):
     try:
         def clean(value):
             return ' '.join((value or '').split())
+        shared = contact.email_kind.startswith('Likely shared inbox')
+        named = bool(clean(contact.first_name)) and not shared
+        title = clean(contact.title)
+        if shared or not named or title.casefold() in {'public website contact', 'unknown', 'n/a'}:
+            title = ''
+        recipient_type = 'shared inbox' if shared else ('named contact' if named else 'unnamed contact')
         context = {
-            'first_name': clean(contact.first_name) or 'there',
+            'first_name': clean(contact.first_name) if named else 'team',
+            'routing_question': ('Would you be open to a brief conversation?' if named else 'Could you direct me to the person who handles this?'),
             'company': clean(account.name),
             'sender_name': sender.strip(),
             'offer': offer.strip(),
-            'role_context': (f'Given your role as {clean(contact.title)} at {clean(account.name)}, '
-                             'I wanted to reach out.' if contact.title else
+            'role_context': (f'Given your role as {title} at {clean(account.name)}, '
+                             'I wanted to reach out.' if title else
                              f'I wanted to reach out to the team at {clean(account.name)}.'),
         }
+        ai_metadata = None
+        if personalization == 'ai':
+            context['role_context'], ai_metadata = generate_opening({
+                'company': clean(account.name), 'industry': clean(account.industry),
+                'title': title, 'offer': offer.strip(),
+            })
         messages = []
         for index, day in enumerate((0, 4, 9), start=1):
             template = (TEMPLATE_DIR / f'{TEMPLATE_VERSION}-touch-{index}.txt').read_text()
@@ -55,12 +74,19 @@ def preview_outreach(payload):
                              'body': body.strip()})
         draft = {
             'mode': 'preview', 'sent': False, 'scheduled': False,
+            'revision': 1, 'review_status': 'draft', 'review_history': [],
             'template_version': TEMPLATE_VERSION, 'generation': 'rules-based template',
             'contact_id': contact.id, 'account_id': account.id,
             'recipient': contact.email, 'company': account.name,
+            'recipient_type': recipient_type,
+            'personalization_facts': {'company': clean(account.name), 'industry': clean(account.industry), 'title': title},
+            'review_note': 'Check supplied facts before use. Email ownership and delivery are unverified.',
             'messages': messages,
             'icp_reasons': account.icp_fit_reasons.split(' | ') if account.icp_fit_reasons else [],
         }
+        if ai_metadata:
+            draft['generation'] = 'AI-personalized opening + rules-based template'
+            draft['ai'] = ai_metadata
         activity = Activity(account_id=account.id, contact_id=contact.id,
                             activity_type='outreach_preview', channel='email',
                             summary=json.dumps(draft))
@@ -69,7 +95,8 @@ def preview_outreach(payload):
         run.status = 'success'
         run.records_processed = 1
         run.finished_at = datetime.utcnow()
-        run.detail = f'PREVIEW ONLY: 3 drafts for contact {contact.id}; activity {activity.id}; {TEMPLATE_VERSION}. Sent 0; scheduled 0; provider cost 0.'
+        provider_detail = ('AI usage: ' + json.dumps(ai_metadata) if ai_metadata else 'provider cost 0')
+        run.detail = f'PREVIEW ONLY: 3 drafts for contact {contact.id}; activity {activity.id}; {TEMPLATE_VERSION}. Sent 0; scheduled 0; {provider_detail}.'
         db.session.commit()
         return {**draft, 'activity_id': activity.id, 'agent_run_id': run_id}
     except Exception:
